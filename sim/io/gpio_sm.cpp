@@ -20,21 +20,27 @@ private:
     // State
     MODE mode;
     uint32_t n;
-    bool flag_edge;
+    bool flag_posedge;
+    bool flag_negedge;
     bool flag_level;
     // Standard blocks
     uint32_t counter;
     std::queue<bool> fifo;
     // Outputs
     bool pin_out;
+    bool pin_oe;
     // Input from physical/external pin
     bool pin_in;
+
+    //NEXT STATE variables
+    uint32_t counter_n;
 
 public:
     GPIO_SM()
         : mode(MODE::RELEASE),
           n(0),
-          flag_edge(false),
+          flag_posedge(false),
+          flag_negedge(false),
           flag_level(false),
           counter(0)
     {}
@@ -54,8 +60,11 @@ public:
             fifo.push((val>>i)&1);
         }
     }
-    bool get_flag_edge(){
-        return flag_edge;
+    bool get_flag_posedge(){
+        return flag_posedge;
+    }
+    bool get_flag_negedge(){
+        return flag_negedge;
     }
     bool get_flag_level(){
         return flag_level;
@@ -70,4 +79,58 @@ public:
     // Pin control is private to GPIO_SM
 
     //Internal operations
+    void comb(){
+        switch(mode){
+            case MODE::RELEASE:
+               pin_oe = 0;
+               break;
+            case MODE::WAIT:
+                break;
+            case MODE::SET0:
+                pin_oe=1;
+                pin_out=0;
+                break;
+            case MODE::SET1:
+                pin_oe=1;
+                pin_out=1;
+                break;
+            case MODE::SHIFT_IN:
+                pin_oe=0;
+                break; //sequential only
+            case MODE::SHIFT_OUT:
+                pin_oe=1;
+                break;
+            case MODE::CLK_GEN:
+                break;
+            case MODE::BAUD_GEN:
+                break;
+        }
+    }
+    void seq(){
+        switch(mode){
+            case MODE::RELEASE:
+               pin_oe = 0;
+               break;
+            case MODE::WAIT:
+                break;
+            case MODE::SET0:
+                pin_oe=1;
+                pin_out=0;
+                break;
+            case MODE::SET1:
+                pin_oe=1;
+                pin_out=1;
+                break;
+            case MODE::SHIFT_IN:
+                pin_oe=0;
+                break; //sequential only
+            case MODE::SHIFT_OUT:
+                pin_oe=1;
+                break;
+            case MODE::CLK_GEN:
+                break;
+            case MODE::BAUD_GEN:
+                break;
+        }
+    }
 };
