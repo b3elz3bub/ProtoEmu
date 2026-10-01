@@ -96,13 +96,23 @@ public:
                 break;
             case MODE::SHIFT_IN:
                 pin_oe=0;
+                if(counter==0) counter_n=n;
+                else counter_n=counter-1;
                 break; //sequential only
             case MODE::SHIFT_OUT:
+                if(counter==0) counter_n=n;
+                else counter_n=counter-1;
                 pin_oe=1;
                 break;
             case MODE::CLK_GEN:
+                pin_oe=1;
+                if(counter==0) counter_n=n;
+                else counter_n=counter-1;
                 break;
             case MODE::BAUD_GEN:
+                pin_oe=1;
+                if(counter==0) counter_n=n;
+                else counter_n=counter-1;
                 break;
         }
     }
@@ -122,14 +132,20 @@ public:
                 pin_out=1;
                 break;
             case MODE::SHIFT_IN:
-                pin_oe=0;
+                counter = counter_n;
                 break; //sequential only
             case MODE::SHIFT_OUT:
                 pin_oe=1;
+                counter = counter_n;
                 break;
             case MODE::CLK_GEN:
+                pin_out = ~pin_out;
+                counter = counter_n;
                 break;
             case MODE::BAUD_GEN:
+                pin_out=1;
+                pin_out=0;
+                counter = counter_n;
                 break;
         }
     }
