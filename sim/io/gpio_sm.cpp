@@ -9,9 +9,9 @@ enum class MODE {
     WAIT,       // waits for edge/level specified and sets flag
     SET0,       // Drives the pin to LOW
     SET1,       // Drives the pin to HIGH
-    SHIFT_IN,   // shifts data in to FIFO from pin for N specified cycles
-    SHIFT_OUT,  // shifts data out of FIFO onto pin for N specified cycles
-    CLK_GEN,    // sets pin to CLK mode of f/N where N is specified
+    SHIFT_IN,   // shifts data in to FIFO from pin every Nth cycle
+    SHIFT_OUT,  // shifts data out of FIFO onto pin every Nth cycle
+    CLK_GEN,    // sets pin to CLK mode of f/2N where N is specified
     BAUD_GEN    // sets pin to produce a tick every N/f interval
 };
 
@@ -31,7 +31,8 @@ private:
         // Input from physical/external pin
         bool pin_in_prev = 0;
 
-        uint32_t OSR = 0;
+        // Packet Sizes and Counters
+        uint32_t osr = 0; // DATA Shifted into/out of fifo
         uint8_t bit_cnt = 0;
     };
     Registers curr;
@@ -89,8 +90,34 @@ public:
                 next.pin_out = 1;
                 break;
             case MODE::SHIFT_IN:
+                next.pin_oe = 0;
+                if(curr.counter == 0){
+                    next.counter = curr.n;
+                    next.osr = pin_in;
+                    next.osr = (curr.osr << 1) | (pin_in ? 1 : 0);
+                    next.bit_cnt = curr.bit_cnt + 1;
+                    if(next.bit_cnt == 32){
+                        if(fifo.size() < FIFO_SIZE) fifo.push(next.osr);
+                        next.bit_cnt=0;
+                    }
+                }
+                else next.counter = curr.counter - 1;
                 break;
             case MODE::SHIFT_OUT:
+                next.pin_oe = 1;
+                if(curr.counter == 0){
+                    next.counter = curr.n;
+                    if(curr.bit_cnt==0 && !fifo.empty()){
+                        next.osr = fifo.front();
+                        fifo.pop();
+                        next.bit_cnt = 32;
+                    }
+                    if(curr.bit_cnt > 0){
+                        next.pin_out = curr.osr >> 31 & 1;
+                        next.osr = curr.osr << 1;
+                        next.bit_cnt = curr.bit_cnt - 1;
+                    }
+                }
                 break;
             case MODE::CLK_GEN:
                 next.pin_oe = 1;
@@ -116,6 +143,10 @@ public:
     void seq(){
         next.pin_in_prev = pin_in;
         curr = next;
-    }
+
+        // Flag updates
+        next.flag_level = pin_in;
+        next.flag_negedge = (!pin_in && curr.pin_in_prev);
+        next.flag_posedge = (pin_in && !curr.pin_in_prev);
     }
 };
