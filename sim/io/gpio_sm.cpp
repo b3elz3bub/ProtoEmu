@@ -44,24 +44,29 @@ public:
     GPIO_SM() = default;
 
     void config(MODE mode, uint32_t n){
-        next.mode = mode;
-        next.n = n;
-        next.counter = n;
+        curr.mode = mode;
+        curr.n = n;
+        curr.counter = n;
+        curr.bit_cnt = 0;
+        comb();
     }
 
     // GET,SET FIFO methods assume 32 bit FIFO
     uint32_t get_fifo(){
-        uint32_t val = 0;
-            for (int i = 0; i < FIFO_SIZE && !fifo.empty(); i++){
-                val = (val << 1) | fifo.front();
-                fifo.pop();
-            }
-            return val;
+       if(fifo.empty()) return 0;
+       else{
+           int32_t val = fifo.front();
+           fifo.pop();
+           return val;
+       }
     }
     void set_fifo(uint32_t val){
-        for(int i=31;i>=0;i--){
-            fifo.push((val>>i)&1);
-        }
+        if(fifo.size()<FIFO_SIZE) fifo.push(val);
+    }
+
+    void set_pin_in(bool pin_in){
+        this->pin_in = pin_in;
+        comb();
     }
     // Getters
     bool get_flag_posedge(){return curr.flag_posedge;}
@@ -75,6 +80,12 @@ public:
     //Internal operations
     void comb(){
         next = curr; // defaults
+
+        next.flag_level = pin_in;
+        next.pin_in_prev = pin_in;
+        next.flag_negedge = (!pin_in && curr.pin_in_prev);
+        next.flag_posedge = (pin_in && !curr.pin_in_prev);
+
         switch(curr.mode){
             case MODE::RELEASE:
                next.pin_oe = 0;
@@ -93,7 +104,6 @@ public:
                 next.pin_oe = 0;
                 if(curr.counter == 0){
                     next.counter = curr.n;
-                    next.osr = pin_in;
                     next.osr = (curr.osr << 1) | (pin_in ? 1 : 0);
                     next.bit_cnt = curr.bit_cnt + 1;
                     if(next.bit_cnt == 32){
@@ -118,6 +128,7 @@ public:
                         next.bit_cnt = curr.bit_cnt - 1;
                     }
                 }
+                else next.counter = curr.counter - 1;
                 break;
             case MODE::CLK_GEN:
                 next.pin_oe = 1;
@@ -141,12 +152,13 @@ public:
         }
     }
     void seq(){
-        next.pin_in_prev = pin_in;
         curr = next;
-
-        // Flag updates
-        next.flag_level = pin_in;
-        next.flag_negedge = (!pin_in && curr.pin_in_prev);
-        next.flag_posedge = (pin_in && !curr.pin_in_prev);
+    }
+    void posedge(){
+        seq();
+        comb();
     }
 };
+
+// To-Do List
+// PACKET SIZES parameterization
