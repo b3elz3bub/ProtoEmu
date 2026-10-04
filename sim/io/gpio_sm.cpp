@@ -23,6 +23,7 @@ private:
         bool flag_posedge = false;
         bool flag_negedge = false;
         bool flag_level = false;
+        bool flag_ctr_zero = false;
         // Standard blocks
         uint32_t counter = 0;
         // Outputs
@@ -34,6 +35,7 @@ private:
         // Packet Sizes and Counters
         uint32_t osr = 0; // DATA Shifted into/out of fifo
         uint8_t bit_cnt = 0;
+        uint8_t pckt_len = 0; // Packet Length
     };
     Registers curr;
     Registers next;
@@ -43,9 +45,10 @@ public:
     bool pin_in = 0;
     GPIO_SM() = default;
 
-    void config(MODE mode, uint32_t n){
+    void config(MODE mode, uint32_t n, uint8_t pckt_len = 32){
         curr.mode = mode;
         curr.n = n;
+        curr.pckt_len = (pckt_len > 32 || pckt_len == 0) ? 32 : pckt_len;
         curr.counter = n;
         curr.bit_cnt = 0;
         comb();
@@ -55,7 +58,7 @@ public:
     uint32_t get_fifo(){
        if(fifo.empty()) return 0;
        else{
-           int32_t val = fifo.front();
+           uint32_t val = fifo.front();
            fifo.pop();
            return val;
        }
@@ -71,6 +74,7 @@ public:
     // Getters
     bool get_flag_posedge(){return curr.flag_posedge;}
     bool get_flag_negedge(){return curr.flag_negedge;}
+    bool get_flag_ctr_zero(){return curr.flag_ctr_zero;}
     bool get_flag_level(){return curr.flag_level;} // Latched value
     bool get_pin_out(){return curr.pin_out;} // Asynchrnous value
 
@@ -104,11 +108,18 @@ public:
                 next.pin_oe = 0;
                 if(curr.counter == 0){
                     next.counter = curr.n;
-                    next.osr = (curr.osr << 1) | (pin_in ? 1 : 0);
-                    next.bit_cnt = curr.bit_cnt + 1;
-                    if(next.bit_cnt == 32){
-                        if(fifo.size() < FIFO_SIZE) fifo.push(next.osr);
-                        next.bit_cnt=0;
+                    uint32_t osr_u = (curr.osr << 1)|(pin_in? 1:0);
+                    uint8_t bit_cnt_u = curr.bit_cnt + 1;
+                    if(bit_cnt_u==curr.pckt_len){
+                        if(fifo.size()<FIFO_SIZE){
+                            fifo.push(osr_u);
+                        }
+                        next.bit_cnt = 0;
+                        next.osr =0;
+                    }
+                    else{
+                        next.osr = osr_u;
+                        next.bit_cnt = bit_cnt_u;
                     }
                 }
                 else next.counter = curr.counter - 1;
@@ -117,15 +128,19 @@ public:
                 next.pin_oe = 1;
                 if(curr.counter == 0){
                     next.counter = curr.n;
+                    uint32_t osr_u = curr.osr;
+                    uint8_t bit_cnt_u = curr.bit_cnt;
                     if(curr.bit_cnt==0 && !fifo.empty()){
-                        next.osr = fifo.front();
+                        uint32_t raw = fifo.front();
                         fifo.pop();
-                        next.bit_cnt = 32;
+                        uint8_t shftamt = 32-curr.pckt_len;
+                        osr_u = raw<<shftamt;
+                        bit_cnt_u = curr.pckt_len;
                     }
-                    if(curr.bit_cnt > 0){
-                        next.pin_out = curr.osr >> 31 & 1;
-                        next.osr = curr.osr << 1;
-                        next.bit_cnt = curr.bit_cnt - 1;
+                    else{
+                        next.pin_out = (osr_u>>31) & 1;
+                        next.osr = osr_u << 1;
+                        next.bit_cnt = bit_cnt_u - 1;
                     }
                 }
                 else next.counter = curr.counter - 1;
@@ -152,6 +167,8 @@ public:
         }
     }
     void seq(){
+        if(next.counter == 0) next.flag_ctr_zero = 1;
+        else next.flag_ctr_zero = 0;
         curr = next;
     }
     void posedge(){
@@ -160,5 +177,8 @@ public:
     }
 };
 
-// To-Do List
-// PACKET SIZES parameterization
+// TO-DO
+// FIFO SHIFT IN and SHIFT OUT may be wrong
+// check comb() after set_pin_in
+// check if seq() after zero flag is correct
+// verify cycle by cycle
