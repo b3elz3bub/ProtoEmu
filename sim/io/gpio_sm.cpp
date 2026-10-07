@@ -11,8 +11,8 @@ enum class MODE {
     SET1,       // Drives the pin to HIGH
     SHIFT_IN,   // shifts data in to FIFO from pin every Nth cycle
     SHIFT_OUT,  // shifts data out of FIFO onto pin every Nth cycle
-    CLK_GEN,    // sets pin to CLK mode of f/2N where N is specified
-    BAUD_GEN    // sets pin to produce a tick every N/f interval
+    CLK_GEN,    // sets pin to CLK mode of f/2(N+1) where N is specified
+    BAUD_GEN    // sets pin to produce a tick every (N+1)/f interval
 };
 
 class GPIO_SM {
@@ -90,6 +90,9 @@ public:
         next.flag_negedge = (!pin_in && curr.pin_in_prev);
         next.flag_posedge = (pin_in && !curr.pin_in_prev);
 
+        next.counter = curr.counter - 1;
+        if(curr.counter == 0) next.counter = curr.n;
+
         switch(curr.mode){
             case MODE::RELEASE:
                next.pin_oe = 0;
@@ -107,7 +110,6 @@ public:
             case MODE::SHIFT_IN:
                 next.pin_oe = 0;
                 if(curr.counter == 0){
-                    next.counter = curr.n;
                     uint32_t osr_u = (curr.osr << 1)|(pin_in? 1:0);
                     uint8_t bit_cnt_u = curr.bit_cnt + 1;
                     if(bit_cnt_u==curr.pckt_len){
@@ -122,12 +124,10 @@ public:
                         next.bit_cnt = bit_cnt_u;
                     }
                 }
-                else next.counter = curr.counter - 1;
                 break;
             case MODE::SHIFT_OUT:
                 next.pin_oe = 1;
                 if(curr.counter == 0){
-                    next.counter = curr.n;
                     uint32_t osr_u = curr.osr;
                     uint8_t bit_cnt_u = curr.bit_cnt;
                     if(curr.bit_cnt==0 && !fifo.empty()){
@@ -136,6 +136,7 @@ public:
                         uint8_t shftamt = 32-curr.pckt_len;
                         osr_u = raw<<shftamt;
                         bit_cnt_u = curr.pckt_len;
+                        next.bit_cnt = bit_cnt_u;
                     }
                     else{
                         next.pin_out = (osr_u>>31) & 1;
@@ -143,25 +144,20 @@ public:
                         next.bit_cnt = bit_cnt_u - 1;
                     }
                 }
-                else next.counter = curr.counter - 1;
                 break;
             case MODE::CLK_GEN:
                 next.pin_oe = 1;
                 if(curr.counter==0){
                     next.pin_out = ~curr.pin_out;
-                    next.counter = curr.n;
                 }
-                else next.counter = curr.counter - 1;
                 break;
             case MODE::BAUD_GEN:
                 next.pin_oe = 1;
                 if(curr.counter == 0){
                     next.pin_out = 1;
-                    next.counter = curr.n;
                 }
                 else{
                     next.pin_out = 0;
-                    next.counter = curr.counter - 1;
                 }
                 break;
         }
@@ -177,8 +173,9 @@ public:
     }
 };
 
-// TO-DO
+// TO-DO:
 // FIFO SHIFT IN and SHIFT OUT may be wrong
 // check comb() after set_pin_in
 // check if seq() after zero flag is correct
-// verify cycle by cycle
+// Fifo Sizes need to be modified (8 bit word X depth)
+// Verify State Description Counts
