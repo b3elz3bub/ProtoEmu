@@ -36,6 +36,22 @@ private:
         uint32_t osr = 0; // DATA Shifted into/out of fifo
         uint8_t bit_cnt = 0;
         uint8_t pckt_len = 0; // Packet Length
+
+        // Fault insertion
+        bool fault_en = 0;
+        bool skew_en = 0;
+        uint8_t skew_cnt = 0;
+        uint8_t skew_counter = 0;
+        bool pin_out_saved = 0;
+        bool bit_flip = 0;
+        bool glitch_en = 0;
+        bool pin_out_actual = 0;
+
+        // Timing Monitor
+        bool tmon_en = 0;
+        bool tmon_trig = 0;
+        uint16_t tmon_ctr = 0;
+
     };
     Registers curr;
     Registers next;
@@ -89,6 +105,9 @@ public:
         next.pin_in_prev = pin_in;
         next.flag_negedge = (!pin_in && curr.pin_in_prev);
         next.flag_posedge = (pin_in && !curr.pin_in_prev);
+
+        if(curr.tmon_trig && curr.tmon_ctr < 0xFFFF) next.tmon_ctr = curr.tmon_ctr + 1;
+        if(!pin_in && curr.pin_in_prev || pin_in && !curr.pin_in_prev) next.tmon_trig = !next.tmon_trig;
 
         next.counter = curr.counter - 1;
         if(curr.counter == 0) next.counter = curr.n;
@@ -144,11 +163,12 @@ public:
                         next.bit_cnt = bit_cnt_u - 1;
                     }
                 }
+                next.pin_out = next.pin_out;
                 break;
             case MODE::CLK_GEN:
                 next.pin_oe = 1;
                 if(curr.counter==0){
-                    next.pin_out = ~curr.pin_out;
+                    next.pin_out = !curr.pin_out;
                 }
                 break;
             case MODE::BAUD_GEN:
@@ -160,11 +180,26 @@ public:
                     next.pin_out = 0;
                 }
                 break;
+            }
+        if(curr.fault_en){
+            next.pin_out_actual = next.pin_out;
+            if(curr.skew_en){
+                if(curr.counter == 0){
+                    next.pin_out_saved = next.pin_out;
+                    next.pin_out = curr.pin_out;
+                    next.skew_counter = curr.skew_cnt;
+                }
+                if(curr.skew_counter == 0) next.pin_out = next.pin_out_saved;
+                next.skew_counter = curr.skew_counter - 1;
+            }
+            if(curr.bit_flip) next.pin_out = !next.pin_out;
+            if(curr.counter == 0 && curr.glitch_en) next.pin_out = !next.pin_out;
+            else if(curr.glitch_en) next.pin_out = next.pin_out_actual;
         }
-    }
-    void seq(){
         if(next.counter == 0) next.flag_ctr_zero = 1;
         else next.flag_ctr_zero = 0;
+    }
+    void seq(){
         curr = next;
     }
     void posedge(){
@@ -179,3 +214,4 @@ public:
 // check if seq() after zero flag is correct
 // Fifo Sizes need to be modified (8 bit word X depth)
 // Verify State Description Counts
+// Fix Skew and Glitch logic
