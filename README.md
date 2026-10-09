@@ -16,13 +16,14 @@ Target Frequency of operation = 100MHz
 
 | Index | Register  | SIze | Purpose                             | Encoding |
 | ----- | --------- | ---- | ----------------------------------- | -------- |
-| 0     | GPIO_CFG  | 32   | Mode(3)+packet size(5)+N(16)        |          |
+| 0     | GPIO_CFG  | 32   | Mode(3)+packet size(3)+N(16)        |          |
 | 1     | GPIO_STAT | 32   | 8x4(posedge,negedge,level,ctr_zero) |          |
-| 2     | CRC_ACC   |      | CRC Shift accumulator               |          |
-| 3     | CRC_POLY  |      | Generator Polynomial                |          |
-| 4     | CRC_SEED  |      | CRC Initial Seed                    |          |
-| 5     | FLAG      |      | Flag register internal (ALU flags)  |          |
-| 6     | FIFO_BUFF |      | FIFO access (read and write)        |          |
+| 2     | GPIO_FAULT|      | 
+| 3     | CRC_ACC   |      | CRC Shift accumulator               |          |
+| 4     | CRC_POLY  |      | Generator Polynomial                |          |
+| 5     | CRC_SEED  |      | CRC Initial Seed                    |          |
+| 6     | FLAG      |      | Flag register internal (ALU flags)  |          |
+| 7     | FIFO_BUFF |      | FIFO access (read and write)        |          |
 
 ## Instructions
 
