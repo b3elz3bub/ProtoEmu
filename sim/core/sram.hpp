@@ -33,10 +33,6 @@ public:
 private:
     std::array<uint32_t, WORDS> mem{};
 
-    // curr_read = the request sampled LAST edge; seq() produces A_DOUT
-    // from it THIS edge -- this is what gives the correct one-cycle
-    // registered latency. next_read = what comb() is staging THIS edge,
-    // to be serviced on the edge after this one.
     struct ReadReq { bool pending = false; uint16_t addr = 0; };
     ReadReq curr_read{};
     ReadReq next_read{};
@@ -72,13 +68,6 @@ public:
             mem[write_addr] = (cur & ~write_mask) | (write_data & write_mask);
         }
         if (curr_read.pending) {
-            // Write-through falls out naturally here: if A_WEN and A_REN
-            // were both set on the SAME edge as this read's request, the
-            // write above committed to mem[] one full edge before this
-            // deferred read actually fires, so it already sees the new
-            // data. Matches Ken's page ("both high is a write-through"),
-            // but confirm against the macro's own .txt datasheet for the
-            // exact guarantee, not just this derivation.
             io.A_DOUT = mem[curr_read.addr];
         }
         curr_read = next_read;
